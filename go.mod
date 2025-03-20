@@ -1,4 +1,4 @@
-module github.com/codersaadi/secretkeeper
+module github.com/codersaadi/secretkeeper-go
 
 go 1.24.1
 
