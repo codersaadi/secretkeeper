@@ -88,6 +88,27 @@ const (
 	ConfigFile = "config.json"
 )
 
+// CORSMiddleware adds CORS headers to every response
+func CORSMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Set CORS headers for all responses
+		w.Header().Set("Access-Control-Allow-Origin", "http://localhost:3000")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With, Accept")
+		w.Header().Set("Access-Control-Allow-Credentials", "true")
+		w.Header().Set("Access-Control-Max-Age", "86400") // 24 hours
+
+		// Handle preflight requests
+		if r.Method == "OPTIONS" {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+
+		// Process other requests
+		next.ServeHTTP(w, r)
+	})
+}
+
 func init() {
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
@@ -139,6 +160,16 @@ func init() {
 	}()
 }
 
+// Global OPTIONS handler for preflight requests
+func globalOptionsHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Access-Control-Allow-Origin", "http://localhost:3000")
+	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With, Accept")
+	w.Header().Set("Access-Control-Allow-Credentials", "true")
+	w.Header().Set("Access-Control-Max-Age", "86400")
+	w.WriteHeader(http.StatusOK)
+}
+
 func main() {
 	fmt.Printf("\n%s API Server v%s\n", AppName, Version)
 	fmt.Println(strings.Repeat("=", 40))
@@ -146,8 +177,17 @@ func main() {
 	// Initialize router
 	router := mux.NewRouter()
 
+	// Apply CORS middleware to all routes
+	router.Use(CORSMiddleware)
+
+	// Add a global handler for OPTIONS requests
+	router.Methods("OPTIONS").HandlerFunc(globalOptionsHandler)
+
 	// API endpoints
 	apiRouter := router.PathPrefix("/api").Subrouter()
+
+	// Handle OPTIONS for the API endpoints
+	apiRouter.Methods("OPTIONS").HandlerFunc(globalOptionsHandler)
 
 	// Public routes
 	apiRouter.HandleFunc("/auth", handleAuth).Methods("POST")
@@ -179,6 +219,7 @@ func main() {
 	// Start server
 	serverAddr := fmt.Sprintf(":%d", 3200)
 	fmt.Printf("Starting %s API server on %s\n", AppName, serverAddr)
+	fmt.Printf("CORS enabled: Allowing requests from http://localhost:3000\n")
 
 	if config.EnableTLS {
 		log.Fatal(http.ListenAndServeTLS(serverAddr, config.CertFile, config.KeyFile, router))
